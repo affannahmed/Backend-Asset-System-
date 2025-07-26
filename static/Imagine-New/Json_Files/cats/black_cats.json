@@ -1,0 +1,38 @@
+{
+    "Image0": {
+        "Name": "0",
+        "Prem": true,
+        "main_category": "cats",
+        "objects": [
+            "black",
+            "baby",
+            "sleeping"
+        ],
+        "sub_category": "black_cats"
+    },
+    "Image1": {
+        "Name": "1",
+        "Prem": true,
+        "main_category": "cats",
+        "objects": [
+            "whitish",
+            "darkish",
+            "mix",
+            "updated",
+            "hehe"
+        ],
+        "sub_category": "black_cats"
+    },
+    "Image2": {
+        "Name": "2",
+        "Prem": false,
+        "main_category": "cats",
+        "objects": [
+            "river",
+            "black",
+            "cat",
+            "beautiful"
+        ],
+        "sub_category": "black_cats"
+    }
+}

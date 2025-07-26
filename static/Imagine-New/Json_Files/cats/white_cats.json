@@ -1,0 +1,61 @@
+{
+    "Image0": {
+        "Name": "0",
+        "Prem": true,
+        "main_category": "cats",
+        "objects": [
+            "mano",
+            "baby",
+            "white",
+            "cat"
+        ],
+        "sub_category": "white_cats"
+    },
+    "Image1": {
+        "Name": "1",
+        "Prem": true,
+        "main_category": "cats",
+        "sub_category": "white_cats",
+        "objects": [
+            "after",
+            "adding",
+            "black",
+            "to",
+            "whitish",
+            "cats"
+        ]
+    },
+    "Image2": {
+        "Name": "2",
+        "Prem": false,
+        "main_category": "cats",
+        "objects": [
+            "two",
+            "cats",
+            "babies"
+        ],
+        "sub_category": "white_cats"
+    },
+    "Image3": {
+        "Name": "3",
+        "Prem": false,
+        "main_category": "cats",
+        "objects": [
+            "mountain",
+            "cat",
+            "angry"
+        ],
+        "sub_category": "white_cats"
+    },
+    "Image4": {
+        "Name": "4",
+        "Prem": false,
+        "main_category": "cats",
+        "objects": [
+            "beautiful",
+            "baby",
+            "innocent"
+        ],
+        "sub_category": "white_cats"
+    }
+}

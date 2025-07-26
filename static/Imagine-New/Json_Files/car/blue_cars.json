@@ -1,0 +1,34 @@
+{
+    "Image0": {
+        "Name": "0",
+        "Prem": true,
+        "main_category": "car",
+        "objects": [
+            "bmw",
+            "black",
+            "aesthetic"
+        ],
+        "sub_category": "blue_cars"
+    },
+    "Image1": {
+        "Name": "1",
+        "Prem": true,
+        "main_category": "car",
+        "objects": [
+            "royal",
+            "headlights"
+        ],
+        "sub_category": "blue_cars"
+    },
+    "Image2": {
+        "Name": "2",
+        "Prem": false,
+        "main_category": "car",
+        "objects": [
+            "ordinary",
+            "alloy",
+            "wheels"
+        ],
+        "sub_category": "blue_cars"
+    }
+}

@@ -1,0 +1,25 @@
+{
+    "Image0": {
+        "Name": "0",
+        "Prem": true,
+        "main_category": "politician",
+        "objects": [
+            "khan",
+            "leader",
+            "honest",
+            "brave"
+        ],
+        "sub_category": "pakistan"
+    },
+    "Image1": {
+        "Name": "1",
+        "Prem": false,
+        "main_category": "politician",
+        "objects": [
+            "chor",
+            "daku",
+            "luttera"
+        ],
+        "sub_category": "pakistan"
+    }
+}

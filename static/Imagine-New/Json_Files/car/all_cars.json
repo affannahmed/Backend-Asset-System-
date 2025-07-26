@@ -1,0 +1,135 @@
+{
+    "Image0": {
+        "Name": "0",
+        "Prem": true,
+        "main_category": "car",
+        "objects": [
+            "whether",
+            "car",
+            "lover",
+            "alloy"
+        ],
+        "sub_category": "all_cars"
+    },
+    "Image1": {
+        "Name": "1",
+        "Prem": false,
+        "main_category": "car",
+        "objects": [
+            "ordinary",
+            "alloy",
+            "wheels"
+        ],
+        "sub_category": "all_cars"
+    },
+    "Image2": {
+        "Name": "2",
+        "Prem": true,
+        "main_category": "car",
+        "objects": [
+            "ferrari",
+            "red",
+            "damn"
+        ],
+        "sub_category": "all_cars"
+    },
+    "Image3": {
+        "Name": "3",
+        "Prem": false,
+        "main_category": "car",
+        "objects": [
+            "wagonr"
+        ],
+        "sub_category": "all_cars"
+    },
+    "Image4": {
+        "Name": "4",
+        "Prem": true,
+        "main_category": "car",
+        "objects": [
+            "yellow",
+            "jee",
+            "lambo"
+        ],
+        "sub_category": "all_cars"
+    },
+    "Image5": {
+        "Name": "5",
+        "Prem": true,
+        "main_category": "car",
+        "objects": [
+            "blue",
+            "lamboo"
+        ],
+        "sub_category": "all_cars"
+    },
+    "Image6": {
+        "Name": "6",
+        "Prem": true,
+        "main_category": "car",
+        "sub_category": "all_cars",
+        "objects": [
+            "affan",
+            "coat",
+            "descent"
+        ]
+    },
+    "Image7": {
+        "Name": "7",
+        "Prem": true,
+        "main_category": "car",
+        "objects": [
+            "bmw",
+            "black",
+            "aesthetic"
+        ],
+        "sub_category": "all_cars"
+    },
+    "Image8": {
+        "Name": "8",
+        "Prem": true,
+        "main_category": "car",
+        "objects": [
+            "red",
+            "lambo"
+        ],
+        "sub_category": "all_cars"
+    },
+    "Image9": {
+        "Name": "9",
+        "Prem": true,
+        "main_category": "car",
+        "objects": [
+            "wow",
+            "car"
+        ],
+        "sub_category": "all_cars"
+    },
+    "Image10": {
+        "Name": "10",
+        "Prem": true,
+        "main_category": "car",
+        "objects": [
+            "darkish"
+        ],
+        "sub_category": "all_cars"
+    },
+    "Image11": {
+        "Name": "11",
+        "Prem": true,
+        "main_category": "car",
+        "objects": [
+            "lambo"
+        ],
+        "sub_category": "all_cars"
+    },
+    "Image12": {
+        "Name": "12",
+        "Prem": false,
+        "main_category": "car",
+        "sub_category": "all_cars",
+        "objects": [
+            "delusion"
+        ]
+    }
+}
