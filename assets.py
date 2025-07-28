@@ -12,10 +12,12 @@ app = Flask(__name__)
 CORS(app)
 
 # --- Configurable Paths ---
-BASE_PATH = r"E:\office\Imagine_App\static\Imagine-New"
+BASE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'Imagine-New')
+
 JSON_FOLDER = os.path.join(BASE_PATH, "Json_Files")
 STATIC_URL_PATH = "/static/Imagine-New"
-UPLOAD_FOLDER = BASE_PATH  # Required for update/delete image operations
+UPLOAD_FOLDER = BASE_PATH
+
 
 
 # --- Helper function to sanitize folder names ---
@@ -554,12 +556,19 @@ import os
 from datetime import datetime
 
 # === Paths ===
-STATIC_DIR = "E:/office/Imagine_App/static"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
 CURRENT_DIR = os.path.join(STATIC_DIR, "Assets_IBGC")
 BACKUP_DIR = os.path.join(STATIC_DIR, "Assets_IBGC_Last")
 CURRENT_JSON_DIR = os.path.join(CURRENT_DIR, "Json_Files")
 BACKUP_JSON_DIR = os.path.join(BACKUP_DIR, "Json_Files_Last")
 VERSION_FILE = os.path.join(STATIC_DIR, "version_IBGC.json")
+
+# CURRENT_DIR = os.path.join(STATIC_DIR, "Assets_IBGC")
+# BACKUP_DIR = os.path.join(STATIC_DIR, "Assets_IBGC_Last")
+# CURRENT_JSON_DIR = os.path.join(CURRENT_DIR, "Json_Files")
+# BACKUP_JSON_DIR = os.path.join(BACKUP_DIR, "Json_Files_Last")
+# VERSION_FILE = os.path.join(STATIC_DIR, "version_IBGC.json")
 
 # === Utility: Get Short Name Prefix ===
 def get_short_name(category_name):
