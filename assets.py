@@ -27,6 +27,30 @@ def sanitize_name(name):
 
 
                 ########  **** ( IMAGINE APP ) **** ########
+# ----- Login Function -----
+VALID_EMAIL = "admin@codeknitters.com"
+VALID_PASSWORD = "codeknitters123"
+@app.route('/login', methods=['POST'])
+def login():
+    try:
+        if not request.is_json:
+            return jsonify({'message': 'Request must be JSON'}), 400
+
+        data = request.get_json()
+
+        email = data.get('email')
+        password = data.get('password')
+
+        if not email or not password:
+            return jsonify({'message': 'Email and password are required'}), 400
+
+        if email == VALID_EMAIL and password == VALID_PASSWORD:
+            return jsonify({'message': 'Login successful'}), 200
+        else:
+            return jsonify({'message': 'Invalid credentials'}), 401
+
+    except Exception as e:
+        return jsonify({'message': 'Server error', 'error': str(e)}), 500
 
 
     ################# -----  FOR ADDING NEW CATEGORY  ------ ##################
