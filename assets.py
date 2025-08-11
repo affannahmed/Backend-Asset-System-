@@ -9,7 +9,8 @@ import zipfile
 
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
+
 
 # --- Configurable Paths ---
 BASE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'Imagine-New')
@@ -588,11 +589,7 @@ CURRENT_JSON_DIR = os.path.join(CURRENT_DIR, "Json_Files")
 BACKUP_JSON_DIR = os.path.join(BACKUP_DIR, "Json_Files_Last")
 VERSION_FILE = os.path.join(STATIC_DIR, "version_IBGC.json")
 
-# CURRENT_DIR = os.path.join(STATIC_DIR, "Assets_IBGC")
-# BACKUP_DIR = os.path.join(STATIC_DIR, "Assets_IBGC_Last")
-# CURRENT_JSON_DIR = os.path.join(CURRENT_DIR, "Json_Files")
-# BACKUP_JSON_DIR = os.path.join(BACKUP_DIR, "Json_Files_Last")
-# VERSION_FILE = os.path.join(STATIC_DIR, "version_IBGC.json")
+
 
 # === Utility: Get Short Name Prefix ===
 def get_short_name(category_name):
@@ -627,35 +624,48 @@ def increment_version():
 
     return data
 
-# === Add New Category IBGC ===
+
+# === Add Category Route ===
 @app.route('/add-category_IBGC', methods=['POST'])
 def add_category_IBGC():
     try:
-        category_name = request.form.get('category_name')
+        # === Get form data ===
+        category_name = request.form.get('category_name')  # main category
+        sub_category_name = request.form.get('sub_category_name')  # optional
         images = request.files.getlist('images')
-        prem_list = request.form.getlist('prem')  # List of 'true'/'false' strings
+        prem_list = request.form.getlist('prem')  # 'true'/'false'
 
         if not category_name or not images:
             return jsonify({"error": "Missing category_name or images"}), 400
 
-        # === Step 1: Backup CURRENT_DIR -> BACKUP_DIR
+        # === Step 1: Backup ===
         if os.path.exists(BACKUP_DIR):
             shutil.rmtree(BACKUP_DIR)
         shutil.copytree(CURRENT_DIR, BACKUP_DIR)
 
-        # Also rename Json_Files to Json_Files_Last inside the backup
-        if os.path.exists(os.path.join(BACKUP_DIR, "Json_Files")):
-            os.rename(
-                os.path.join(BACKUP_DIR, "Json_Files"),
-                os.path.join(BACKUP_DIR, "Json_Files_Last")
-            )
+        # Rename Json_Files to Json_Files_Last inside the backup
+        json_dir_backup = os.path.join(BACKUP_DIR, "Json_Files")
+        if os.path.exists(json_dir_backup):
+            os.rename(json_dir_backup, BACKUP_JSON_DIR)
 
-        # === Step 2: Prepare current structure
-        category_path = os.path.join(CURRENT_DIR, category_name)
+        # === Step 2: Create image save path ===
+        if sub_category_name:
+            category_path = os.path.join(CURRENT_DIR, category_name, sub_category_name)
+        else:
+            category_path = os.path.join(CURRENT_DIR, category_name)
+
         os.makedirs(category_path, exist_ok=True)
-        os.makedirs(CURRENT_JSON_DIR, exist_ok=True)
 
-        # === Step 3: Save images and prepare JSON
+        # === Step 3: Create JSON path ===
+        if sub_category_name:
+            json_save_dir = os.path.join(CURRENT_JSON_DIR, category_name)
+            os.makedirs(json_save_dir, exist_ok=True)
+            category_json_file = os.path.join(json_save_dir, f"{sub_category_name}.json")
+        else:
+            os.makedirs(CURRENT_JSON_DIR, exist_ok=True)
+            category_json_file = os.path.join(CURRENT_JSON_DIR, f"{category_name}.json")
+
+        # === Step 4: Save images and build JSON ===
         image_json_data = {}
 
         for idx, img in enumerate(images):
@@ -670,24 +680,24 @@ def add_category_IBGC():
             image_json_data[f"Image{idx}"] = {
                 "Name": str(idx),
                 "Prem": prem_flag,
-                "category": category_name
+                "main_category": category_name,
+                "sub_category": sub_category_name if sub_category_name else None
             }
 
-        # === Step 4: Save category JSON
-        category_json_file = os.path.join(CURRENT_JSON_DIR, f"{category_name}.json")
         with open(category_json_file, 'w') as jf:
             json.dump(image_json_data, jf, indent=4)
 
-        # === Step 5: Update version
+        # === Step 5: Update version ===
         version_info = increment_version()
 
         return jsonify({
             "message": f"Category '{category_name}' added successfully.",
+            "sub_category": sub_category_name if sub_category_name else None,
             "new_version": version_info
         })
 
     except Exception as e:
-        # === Rollback: delete current and restore backup
+        # === Rollback on failure ===
         try:
             if os.path.exists(CURRENT_DIR):
                 shutil.rmtree(CURRENT_DIR)
@@ -696,8 +706,8 @@ def add_category_IBGC():
 
             # Restore Json_Files_Last back to Json_Files
             backup_json_last = os.path.join(CURRENT_DIR, "Json_Files_Last")
+            restored_path = os.path.join(CURRENT_DIR, "Json_Files")
             if os.path.exists(backup_json_last):
-                restored_path = os.path.join(CURRENT_DIR, "Json_Files")
                 if os.path.exists(restored_path):
                     shutil.rmtree(restored_path)
                 os.rename(backup_json_last, restored_path)
@@ -713,7 +723,7 @@ def add_category_IBGC():
             "details": str(e)
         }), 500
 
-# -------- View Categories from Folder --------
+# --------- View Categories ---------
 @app.route('/view-category_IBGC', methods=['GET'])
 def view_category_IBGC():
     try:
@@ -722,45 +732,86 @@ def view_category_IBGC():
         if not os.path.exists(CURRENT_DIR):
             return jsonify({"error": "Assets_IBGC directory not found."}), 404
 
-        for category_name in sorted(os.listdir(CURRENT_DIR)):
-            if category_name == "Json_Files":
+        for main_cat in sorted(os.listdir(CURRENT_DIR)):
+            if main_cat == "Json_Files":
                 continue
 
-            category_path = os.path.join(CURRENT_DIR, category_name)
-            json_path = os.path.join(CURRENT_JSON_DIR, f"{category_name}.json")
+            main_cat_path = os.path.join(CURRENT_DIR, main_cat)
 
-            # Correctly parse JSON dictionary
-            image_meta = {}
-            if os.path.exists(json_path):
-                with open(json_path, 'r') as f:
-                    try:
-                        data = json.load(f)
-                        for key, meta in data.items():
-                            filename = meta.get("Name")
-                            prem_value = meta.get("Prem", False)
-                            if filename is not None:
-                                image_meta[f"{filename}.jpg"] = prem_value  # Add other extensions as needed
-                                image_meta[f"{filename}.jpeg"] = prem_value
-                                image_meta[f"{filename}.png"] = prem_value
-                                image_meta[f"{filename}.webp"] = prem_value
-                    except Exception as e:
-                        print(f"Failed to read JSON for {category_name}: {e}")
+            # === Case 1: Main + Subcategories ===
+            if os.path.isdir(main_cat_path):
+                subcategories_exist = False
 
-            if os.path.isdir(category_path):
-                image_list = []
-                for filename in sorted(os.listdir(category_path)):
-                    if filename.lower().endswith(('.webp', '.jpg', '.jpeg', '.png')):
-                        prem_value = image_meta.get(filename, False)
-                        image_list.append({
-                            "filename": filename,
-                            "url": f"/static/Assets_IBGC/{category_name}/{filename}",
-                            "prem": prem_value
+                for subcat in sorted(os.listdir(main_cat_path)):
+                    subcat_path = os.path.join(main_cat_path, subcat)
+
+                    if os.path.isdir(subcat_path):
+                        subcategories_exist = True
+                        json_path = os.path.join(CURRENT_JSON_DIR, main_cat, f"{subcat}.json")
+                        image_meta = {}
+
+                        if os.path.exists(json_path):
+                            with open(json_path, 'r') as f:
+                                try:
+                                    data = json.load(f)
+                                    for key, meta in data.items():
+                                        filename = meta.get("Name")
+                                        prem_value = meta.get("Prem", False)
+                                        if filename is not None:
+                                            for ext in ['.webp', '.jpg', '.jpeg', '.png']:
+                                                image_meta[f"{filename}{ext}"] = prem_value
+                                except Exception as e:
+                                    print(f"Failed to read JSON for {main_cat}/{subcat}: {e}")
+
+                        image_list = []
+                        for filename in sorted(os.listdir(subcat_path)):
+                            if filename.lower().endswith(('.webp', '.jpg', '.jpeg', '.png')):
+                                prem_value = image_meta.get(filename, False)
+                                image_list.append({
+                                    "filename": filename,
+                                    "url": f"/static/Assets_IBGC/{main_cat}/{subcat}/{filename}",
+                                    "prem": prem_value
+                                })
+
+                        categories.append({
+                            "main_category": main_cat,
+                            "sub_category": subcat,
+                            "images": image_list
                         })
 
-                categories.append({
-                    "category": category_name,
-                    "images": image_list
-                })
+                # === Case 2: Main category only (no subfolders) ===
+                if not subcategories_exist:
+                    json_path = os.path.join(CURRENT_JSON_DIR, f"{main_cat}.json")
+                    image_meta = {}
+
+                    if os.path.exists(json_path):
+                        with open(json_path, 'r') as f:
+                            try:
+                                data = json.load(f)
+                                for key, meta in data.items():
+                                    filename = meta.get("Name")
+                                    prem_value = meta.get("Prem", False)
+                                    if filename is not None:
+                                        for ext in ['.webp', '.jpg', '.jpeg', '.png']:
+                                            image_meta[f"{filename}{ext}"] = prem_value
+                            except Exception as e:
+                                print(f"Failed to read JSON for {main_cat}: {e}")
+
+                    image_list = []
+                    for filename in sorted(os.listdir(main_cat_path)):
+                        if filename.lower().endswith(('.webp', '.jpg', '.jpeg', '.png')):
+                            prem_value = image_meta.get(filename, False)
+                            image_list.append({
+                                "filename": filename,
+                                "url": f"/static/Assets_IBGC/{main_cat}/{filename}",
+                                "prem": prem_value
+                            })
+
+                    categories.append({
+                        "main_category": main_cat,
+                        "sub_category": None,
+                        "images": image_list
+                    })
 
         return jsonify(categories)
 
@@ -770,13 +821,12 @@ def view_category_IBGC():
             "details": str(e)
         }), 500
 
-    
-
- # -------- For Deleting a Category --------
+# ---- Delete Full Category ---
 @app.route('/delete-category_IBGC', methods=['POST'])
 def delete_category_IBGC():
     try:
-        category_name = request.form.get('category_name')
+        category_name = request.form.get('category_name')  # required
+        sub_category = request.form.get('sub_category')     # optional
 
         if not category_name:
             return jsonify({"error": "Missing category_name"}), 400
@@ -784,9 +834,9 @@ def delete_category_IBGC():
         # Step 1: Backup current version
         if os.path.exists(BACKUP_DIR):
             shutil.rmtree(BACKUP_DIR)
-        
+
         if os.path.exists(CURRENT_DIR):
-            # Rename Json_Files to Json_Files_Last inside CURRENT_DIR
+            # Backup Json_Files
             current_json_folder = os.path.join(CURRENT_DIR, "Json_Files")
             backup_json_folder = os.path.join(CURRENT_DIR, "Json_Files_Last")
             if os.path.exists(current_json_folder):
@@ -794,13 +844,12 @@ def delete_category_IBGC():
                     shutil.rmtree(backup_json_folder)
                 os.rename(current_json_folder, backup_json_folder)
 
-            # Rename Assets_IBGC to Assets_IBGC_Last
+            # Backup entire CURRENT_DIR
             os.rename(CURRENT_DIR, BACKUP_DIR)
 
-        # Step 2: Work on fresh copy
+        # Step 2: Copy backup to new CURRENT_DIR
         shutil.copytree(BACKUP_DIR, CURRENT_DIR)
 
-        # Rename Json_Files_Last back to Json_Files inside CURRENT_DIR
         new_json_last = os.path.join(CURRENT_DIR, "Json_Files_Last")
         new_json = os.path.join(CURRENT_DIR, "Json_Files")
         if os.path.exists(new_json_last):
@@ -808,33 +857,45 @@ def delete_category_IBGC():
                 shutil.rmtree(new_json)
             os.rename(new_json_last, new_json)
 
-        # Step 3: Delete category folder
-        category_path = os.path.join(CURRENT_DIR, category_name)
+        if sub_category:
+            category_path = os.path.join(CURRENT_DIR, category_name, sub_category)
+            json_file_path = os.path.join(CURRENT_JSON_DIR, category_name, f"{sub_category}.json")
+        else:
+            category_path = os.path.join(CURRENT_DIR, category_name)
+            json_file_path = os.path.join(CURRENT_JSON_DIR, f"{category_name}.json")
+
         if os.path.exists(category_path) and os.path.isdir(category_path):
             shutil.rmtree(category_path)
         else:
-            raise FileNotFoundError(f"Category '{category_name}' not found.")
+            raise FileNotFoundError(f"Category path '{category_path}' not found.")
 
-        # Step 4: Delete JSON file (if exists)
-        category_json_file = os.path.join(CURRENT_JSON_DIR, f"{category_name}.json")
-        if os.path.exists(category_json_file):
-            os.remove(category_json_file)
+        if os.path.exists(json_file_path):
+            os.remove(json_file_path)
 
-        # Step 5: Versioning
+            if sub_category:
+                json_subdir = os.path.dirname(json_file_path)
+                if os.path.exists(json_subdir) and not os.listdir(json_subdir):
+                    os.rmdir(json_subdir)
+
+        if sub_category:
+            main_category_dir = os.path.join(CURRENT_DIR, category_name)
+            if os.path.exists(main_category_dir) and not os.listdir(main_category_dir):
+                os.rmdir(main_category_dir)
+
+        # Step 4: Versioning
         version_info = increment_version()
 
         return jsonify({
-            "message": f"Category '{category_name}' deleted successfully.",
+            "message": f"{'Sub-category' if sub_category else 'Category'} deleted successfully.",
             "new_version": version_info
         })
 
     except Exception as e:
+        # Step 5: Rollback
         try:
-            # Clean up current broken state
             if os.path.exists(CURRENT_DIR):
                 shutil.rmtree(CURRENT_DIR)
 
-            # Restore Assets_IBGC from backup
             if os.path.exists(BACKUP_DIR):
                 os.rename(BACKUP_DIR, CURRENT_DIR)
 
@@ -859,24 +920,23 @@ def delete_category_IBGC():
 
 
   #########################  ***  Update Existing Category  *** #########################
-
- # --- Add more Images to Existing Category ---
 @app.route('/add-images-to-category', methods=['POST'])
 def add_images_to_category():
     try:
-        category_name = request.form.get('category_name')
+        category_name = request.form.get('category_name', '').strip()
+        sub_category = request.form.get('sub_category', '').strip() or None
         images = request.files.getlist('images')
-        prem_list = request.form.getlist('prem')  # optional
+        prem_list = request.form.getlist('prem')  # optional list of 'true'/'false' strings
 
         if not category_name or not images:
-            return jsonify({"error": "Missing category_name or images"}), 400
+            return jsonify({"success": False, "error": "Missing category_name or images"}), 400
 
-        # === Step 1: Backup CURRENT_DIR -> BACKUP_DIR
+        # === Step 1: Backup CURRENT_DIR -> BACKUP_DIR ===
         if os.path.exists(BACKUP_DIR):
             shutil.rmtree(BACKUP_DIR)
         shutil.copytree(CURRENT_DIR, BACKUP_DIR)
 
-        # === Step 2: Rename Json_Files -> Json_Files_Last inside backup
+        # Rename Json_Files to Json_Files_Last inside backup
         backup_json_path = os.path.join(BACKUP_DIR, "Json_Files")
         backup_json_last_path = os.path.join(BACKUP_DIR, "Json_Files_Last")
         if os.path.exists(backup_json_path):
@@ -884,211 +944,256 @@ def add_images_to_category():
                 shutil.rmtree(backup_json_last_path)
             os.rename(backup_json_path, backup_json_last_path)
 
-        # Recreate Json_Files directory (now it's empty)
-        os.makedirs(CURRENT_JSON_DIR, exist_ok=True)
+        # === Step 2: Define category folder and JSON file paths ===
+        if sub_category:
+            category_folder_path = os.path.join(CURRENT_DIR, category_name, sub_category)
+            json_rel_path = os.path.join(category_name, f"{sub_category}.json")
+        else:
+            category_folder_path = os.path.join(CURRENT_DIR, category_name)
+            json_rel_path = f"{category_name}.json"
 
-        # === Step 3: Prepare category path
-        category_path = os.path.join(CURRENT_DIR, category_name)
-        if not os.path.exists(category_path):
-            raise Exception(f"Category '{category_name}' does not exist.")
+        if not os.path.exists(category_folder_path):
+            raise Exception(f"Category folder not found: {category_folder_path}")
 
-        category_json_path = os.path.join(backup_json_last_path, f"{category_name}.json")
-        if not os.path.exists(category_json_path):
-            raise Exception(f"JSON for category '{category_name}' not found.")
+        # === Step 3: Load existing JSON from backup Json_Files_Last if possible, else from current Json_Files, else reconstruct ===
+        existing_data = {}
+        backup_json_file_path = os.path.join(backup_json_last_path, json_rel_path) if os.path.exists(backup_json_last_path) else None
 
-        # Load existing JSON from backup and start fresh in Json_Files
-        with open(category_json_path, 'r') as jf:
-            existing_data = json.load(jf)
+        if backup_json_file_path and os.path.exists(backup_json_file_path):
+            with open(backup_json_file_path, 'r', encoding='utf-8') as f:
+                existing_data = json.load(f)
+        else:
+            current_json_file_path = os.path.join(CURRENT_JSON_DIR, json_rel_path)
+            if os.path.exists(current_json_file_path):
+                with open(current_json_file_path, 'r', encoding='utf-8') as f:
+                    existing_data = json.load(f)
+            else:
+                # Reconstruct from files
+                existing_data = {}
+                existing_files = []
+                for f in os.listdir(category_folder_path):
+                    name, ext = os.path.splitext(f)
+                    if name.isdigit():
+                        existing_files.append(int(name))
+                existing_files.sort()
+                for n in existing_files:
+                    key = f"Image{n}"
+                    existing_data[key] = {
+                        "Name": str(n),
+                        "Prem": False,
+                        "main_category": category_name,
+                        "sub_category": sub_category  # None if no sub_category
+                    }
 
-        existing_image_keys = sorted(existing_data.keys(), key=lambda k: int(existing_data[k]['Name']))
+        # === Step 4: Shift existing images upward to make room at beginning ===
         total_new = len(images)
+        # Map existing images by their integer index
+        existing_by_index = {}
+        for key, val in existing_data.items():
+            try:
+                idx = int(val.get("Name", "0"))
+                existing_by_index[idx] = val
+            except:
+                continue
 
-        # Shift existing images
-        for key in reversed(existing_image_keys):
-            old_index = int(existing_data[key]["Name"])
+        # Rename existing image files from highest index down to avoid overwrite
+        for old_index in sorted(existing_by_index.keys(), reverse=True):
             new_index = old_index + total_new
-            old_file = os.path.join(category_path, f"{old_index}.webp")
-            new_file = os.path.join(category_path, f"{new_index}.webp")
+            old_file = os.path.join(category_folder_path, f"{old_index}.webp")
+            new_file = os.path.join(category_folder_path, f"{new_index}.webp")
             if os.path.exists(old_file):
                 os.rename(old_file, new_file)
-            existing_data[key]["Name"] = str(new_index)
+            existing_by_index[old_index]["Name"] = str(new_index)
 
-        # Save new images
+        # === Step 5: Save new images at indices 0..total_new-1 and build their JSON entries ===
+        os.makedirs(category_folder_path, exist_ok=True)
         new_data = {}
         for idx, img in enumerate(images):
             filename = f"{idx}.webp"
-            img_path = os.path.join(category_path, secure_filename(filename))
+            img_path = os.path.join(category_folder_path, secure_filename(filename))
             img.save(img_path)
 
             prem_flag = False
             if idx < len(prem_list):
-                prem_flag = prem_list[idx].lower() == 'true'
+                prem_flag = str(prem_list[idx]).lower() == 'true'
 
             new_data[f"Image{idx}"] = {
                 "Name": str(idx),
                 "Prem": prem_flag,
-                "category": category_name
+                "main_category": category_name,
+                "sub_category": sub_category  # will be None if no sub_category
             }
 
-        # Merge and reindex everything
-        merged_data = list(new_data.values()) + list(existing_data.values())
+        # === Step 6: Merge new + existing, reindex sequentially, and rename files if needed ===
+        merged_entries = list(new_data.values()) + list(existing_by_index.values())
+        merged_sorted = sorted(merged_entries, key=lambda x: int(x["Name"]))
+
         final_data = {}
-        for i, item in enumerate(merged_data):
+        for i, item in enumerate(merged_sorted):
             old_index = int(item["Name"])
             if old_index != i:
-                old_path = os.path.join(category_path, f"{old_index}.webp")
-                new_path = os.path.join(category_path, f"{i}.webp")
+                old_path = os.path.join(category_folder_path, f"{old_index}.webp")
+                new_path = os.path.join(category_folder_path, f"{i}.webp")
                 if os.path.exists(old_path):
                     os.rename(old_path, new_path)
             item["Name"] = str(i)
             final_data[f"Image{i}"] = item
 
-        # Save updated JSON
-        new_json_path = os.path.join(CURRENT_JSON_DIR, f"{category_name}.json")
-        with open(new_json_path, 'w') as jf:
-            json.dump(final_data, jf, indent=4)
+        # === Step 7: Save updated JSON to CURRENT_JSON_DIR ===
+        final_json_path = os.path.join(CURRENT_JSON_DIR, json_rel_path)
+        os.makedirs(os.path.dirname(final_json_path), exist_ok=True)
+        with open(final_json_path, 'w', encoding='utf-8') as f:
+            json.dump(final_data, f, indent=4)
 
-        # === Step 4: Update version
+        # === Step 8: Update version ===
         version_info = increment_version()
 
         return jsonify({
-            "message": f"{len(images)} image(s) added to '{category_name}' at the beginning.",
+            "success": True,
+            "message": f"{total_new} image(s) added to '{category_name}'" + (f"/{sub_category}" if sub_category else "") + " at the beginning.",
             "new_version": version_info
         })
 
     except Exception as e:
-        # Rollback
+        # === Rollback ===
         try:
             if os.path.exists(CURRENT_DIR):
                 shutil.rmtree(CURRENT_DIR)
             if os.path.exists(BACKUP_DIR):
-                shutil.move(BACKUP_DIR, CURRENT_DIR)
+                shutil.copytree(BACKUP_DIR, CURRENT_DIR)
 
-            # Restore Json_Files_Last back to Json_Files
+            # Restore Json_Files_Last -> Json_Files if present
             backup_json_last = os.path.join(CURRENT_DIR, "Json_Files_Last")
+            restored_path = os.path.join(CURRENT_DIR, "Json_Files")
             if os.path.exists(backup_json_last):
-                restored_path = os.path.join(CURRENT_DIR, "Json_Files")
                 if os.path.exists(restored_path):
                     shutil.rmtree(restored_path)
                 os.rename(backup_json_last, restored_path)
 
-        except Exception as rollback_error:
             return jsonify({
-                "error": "Rollback failed.",
-                "details": str(rollback_error)
+                "success": False,
+                "error": "Something went wrong. Rolled back successfully.",
+                "details": str(e)
             }), 500
-
-        return jsonify({
-            "error": "Something went wrong.",
-            "details": str(e)
-        }), 500
-
-
-# =======  * Rename the Existing Category Name * =======  
-@app.route('/rename-category', methods=['POST'])
-def rename_category():
-    try:
-        old_name = request.form.get('old_name')  # e.g., "blur"
-        new_name = request.form.get('new_name')  # e.g., "Affan"
-
-        if not old_name or not new_name:
-            return jsonify({"success": False, "error": "Missing old_name or new_name"}), 400
-
-        # Step 1: Backup current version using same folder strategy
-        if os.path.exists(BACKUP_DIR):
-            shutil.rmtree(BACKUP_DIR)
-
-        if os.path.exists(CURRENT_DIR):
-            # Rename Json_Files to Json_Files_Last inside CURRENT_DIR
-            current_json_folder = os.path.join(CURRENT_DIR, "Json_Files")
-            backup_json_folder = os.path.join(CURRENT_DIR, "Json_Files_Last")
-            if os.path.exists(current_json_folder):
-                if os.path.exists(backup_json_folder):
-                    shutil.rmtree(backup_json_folder)
-                os.rename(current_json_folder, backup_json_folder)
-
-            # Rename Assets_IBGC to Assets_IBGC_Last
-            os.rename(CURRENT_DIR, BACKUP_DIR)
-
-        # Step 2: Work on fresh copy
-        shutil.copytree(BACKUP_DIR, CURRENT_DIR)
-
-        # Rename Json_Files_Last back to Json_Files
-        new_json_last = os.path.join(CURRENT_DIR, "Json_Files_Last")
-        new_json = os.path.join(CURRENT_DIR, "Json_Files")
-        if os.path.exists(new_json_last):
-            if os.path.exists(new_json):
-                shutil.rmtree(new_json)
-            os.rename(new_json_last, new_json)
-
-        # Step 3: Define paths
-        old_category_path = os.path.join(CURRENT_DIR, old_name)
-        new_category_path = os.path.join(CURRENT_DIR, new_name)
-
-        old_json_path = os.path.join(CURRENT_JSON_DIR, f"{old_name}.json")
-        new_json_path = os.path.join(CURRENT_JSON_DIR, f"{new_name}.json")
-
-        # Step 4: Check existence
-        if not os.path.exists(old_category_path):
-            raise Exception(f"Category folder '{old_name}' does not exist.")
-
-        if os.path.exists(new_category_path):
-            raise Exception(f"Category folder '{new_name}' already exists.")
-
-        if not os.path.exists(old_json_path):
-            raise Exception(f"JSON file '{old_name}.json' does not exist.")
-
-        # Step 5: Rename category folder and JSON file
-        os.rename(old_category_path, new_category_path)
-        os.rename(old_json_path, new_json_path)
-
-        # Step 6: Update version
-        version_data = increment_version()
-
-        return jsonify({
-            "success": True,
-            "message": f"Category renamed from '{old_name}' to '{new_name}' successfully.",
-            "version": version_data
-        })
-
-    except Exception as e:
-        try:
-            # Rollback
-            if os.path.exists(CURRENT_DIR):
-                shutil.rmtree(CURRENT_DIR)
-
-            if os.path.exists(BACKUP_DIR):
-                os.rename(BACKUP_DIR, CURRENT_DIR)
-
-                # Restore Json_Files_Last to Json_Files
-                restored_json_last = os.path.join(CURRENT_DIR, "Json_Files_Last")
-                restored_json = os.path.join(CURRENT_DIR, "Json_Files")
-                if os.path.exists(restored_json_last):
-                    if os.path.exists(restored_json):
-                        shutil.rmtree(restored_json)
-                    os.rename(restored_json_last, restored_json)
 
         except Exception as rollback_error:
             return jsonify({
                 "success": False,
                 "error": "Rollback failed.",
-                "details": str(rollback_error)
+                "original_error": str(e),
+                "rollback_error": str(rollback_error)
             }), 500
+
+
+@app.route('/rename-category', methods=['POST'])
+def rename_category():
+    try:
+        old_main_name = request.form.get('old_main_name', '').strip()
+        new_main_name = request.form.get('new_main_name', '').strip() or old_main_name
+        old_sub_name = request.form.get('old_sub_name', '').strip() or None
+        new_sub_name = request.form.get('new_sub_name', '').strip() or old_sub_name
+
+        if not old_main_name:
+            return jsonify({"success": False, "error": "Missing old_main_name"}), 400
+
+        if old_main_name == "Frame Categories" and new_main_name != old_main_name:
+            return jsonify({"success": False, "error": "Main category 'Frame Categories' cannot be renamed."}), 400
+
+        # Backup
+        if os.path.exists(BACKUP_DIR):
+            shutil.rmtree(BACKUP_DIR)
+        if os.path.exists(CURRENT_DIR):
+            shutil.copytree(CURRENT_DIR, BACKUP_DIR)
+
+        old_main_path = os.path.join(CURRENT_DIR, old_main_name)
+        new_main_path = os.path.join(CURRENT_DIR, new_main_name)
+        old_main_json = os.path.join(CURRENT_JSON_DIR, f"{old_main_name}.json")
+        new_main_json = os.path.join(CURRENT_JSON_DIR, f"{new_main_name}.json")
+
+        if not os.path.exists(old_main_path):
+            return jsonify({"success": False, "error": f"Main category '{old_main_name}' not found."}), 404
+        if old_main_name != new_main_name and os.path.exists(new_main_path):
+            return jsonify({"success": False, "error": f"Main category '{new_main_name}' already exists."}), 400
+
+        # MAIN rename
+        if old_main_name != new_main_name:
+            os.rename(old_main_path, new_main_path)
+            if os.path.exists(old_main_json):
+                os.rename(old_main_json, new_main_json)
+            old_main_json_dir = os.path.join(CURRENT_JSON_DIR, old_main_name)
+            new_main_json_dir = os.path.join(CURRENT_JSON_DIR, new_main_name)
+            if os.path.exists(old_main_json_dir):
+                os.rename(old_main_json_dir, new_main_json_dir)
+
+            # --- NEW PART: update "category" inside new_main_json ---
+            if os.path.exists(new_main_json):
+                with open(new_main_json, 'r+', encoding='utf-8') as f:
+                    data = json.load(f)
+                    # Update "category" in all images if old_main_name appears
+                    for img_key, img_val in data.items():
+                        if img_val.get("category") == old_main_name:
+                            img_val["category"] = new_main_name
+                    f.seek(0)
+                    json.dump(data, f, indent=4)
+                    f.truncate()
+
+        # SUB rename
+        if old_sub_name and old_sub_name != new_sub_name:
+            old_sub_path = os.path.join(new_main_path, old_sub_name)
+            new_sub_path = os.path.join(new_main_path, new_sub_name)
+            old_sub_json = os.path.join(CURRENT_JSON_DIR, new_main_name, f"{old_sub_name}.json")
+            new_sub_json = os.path.join(CURRENT_JSON_DIR, new_main_name, f"{new_sub_name}.json")
+
+            if not os.path.exists(old_sub_path):
+                return jsonify({"success": False, "error": f"Subcategory '{old_sub_name}' not found in '{new_main_name}'"}), 404
+            if os.path.exists(new_sub_path):
+                return jsonify({"success": False, "error": f"Subcategory '{new_sub_name}' already exists in '{new_main_name}'"}), 400
+
+            os.rename(old_sub_path, new_sub_path)
+            if os.path.exists(old_sub_json):
+                os.rename(old_sub_json, new_sub_json)
+                with open(new_sub_json, 'r+', encoding='utf-8') as f:
+                    data = json.load(f)
+                    data["sub_category"] = new_sub_name
+                    # --- NEW PART: update "sub_category" field inside all images ---
+                    for img_key, img_val in data.items():
+                        if img_val.get("sub_category") == old_sub_name:
+                            img_val["sub_category"] = new_sub_name
+                    f.seek(0)
+                    json.dump(data, f, indent=4)
+                    f.truncate()
+
+        version_data = increment_version()
+
+        return jsonify({
+            "success": True,
+            "message": "Rename successful.",
+            "version": version_data
+        })
+
+    except Exception as e:
+        # Rollback on error
+        if os.path.exists(CURRENT_DIR):
+            shutil.rmtree(CURRENT_DIR)
+        if os.path.exists(BACKUP_DIR):
+            shutil.copytree(BACKUP_DIR, CURRENT_DIR)
 
         return jsonify({"success": False, "error": str(e)}), 500
 
-
-# # -----  Replace the Existing Image ------
 @app.route('/replace-category-image', methods=['POST'])
 def replace_category_image():
     try:
-        category_name = request.form.get('category_name')
-        old_filename = request.form.get('old_filename')
+        main_category = request.form.get('main_category', '').strip()
+        sub_category = request.form.get('sub_category', '').strip() or None
+        old_filename = request.form.get('old_filename', '').strip()
         new_image = request.files.get('new_image')
-        prem_flag_str = request.form.get('prem', 'false')
-        prem_flag = prem_flag_str.lower() == 'true'
+        prem_flag = str(request.form.get('prem', 'false')).lower() == 'true'
 
-        if not category_name or not old_filename or not new_image:
+        if not main_category or not old_filename or new_image:
+            # Note: new_image can be present as FileStorage; we check not None below
+            pass
+
+        if not main_category or not old_filename or new_image is None:
             return jsonify({"success": False, "error": "Missing required fields"}), 400
 
         # === Step 1: Backup CURRENT_DIR -> BACKUP_DIR ===
@@ -1104,53 +1209,203 @@ def replace_category_image():
                 shutil.rmtree(backup_json_last_path)
             os.rename(backup_json_path, backup_json_last_path)
 
-        # === Step 3: Prepare category path ===
-        category_path = os.path.join(CURRENT_DIR, category_name)
+        # === Step 3: Prepare category paths ===
+        if sub_category:
+            category_path = os.path.join(CURRENT_DIR, main_category, sub_category)
+            json_rel_path = os.path.join(main_category, f"{sub_category}.json")
+        else:
+            category_path = os.path.join(CURRENT_DIR, main_category)
+            json_rel_path = f"{main_category}.json"
+
         if not os.path.exists(category_path):
-            raise Exception(f"Category '{category_name}' does not exist.")
+            return jsonify({"success": False, "error": f"Category path '{category_path}' does not exist."}), 404
 
-        # === Step 4: Load JSON from backup ===
-        category_json_path = os.path.join(backup_json_last_path, f"{category_name}.json")
-        if not os.path.exists(category_json_path):
-            raise Exception(f"JSON for category '{category_name}' not found.")
+        # Choose JSON source (prefer backup Json_Files_Last)
+        json_data = {}
+        backup_json_file = None
+        if os.path.exists(backup_json_last_path):
+            backup_json_file = os.path.join(backup_json_last_path, json_rel_path)
+        if backup_json_file and os.path.exists(backup_json_file):
+            with open(backup_json_file, 'r', encoding='utf-8') as jf:
+                json_data = json.load(jf)
+        else:
+            alt_current_json = os.path.join(CURRENT_JSON_DIR, json_rel_path)
+            if os.path.exists(alt_current_json):
+                with open(alt_current_json, 'r', encoding='utf-8') as jf:
+                    json_data = json.load(jf)
+            else:
+                # fallback: reconstruct from folder
+                for f in os.listdir(category_path):
+                    name, ext = os.path.splitext(f)
+                    if name.isdigit():
+                        key = f"Image{name}"
+                        json_data[key] = {"Name": str(name), "Prem": False, "category": main_category}
+                        if sub_category:
+                            json_data[key]["sub_category"] = sub_category
 
-        with open(category_json_path, 'r') as jf:
-            json_data = json.load(jf)
-
-        # === Step 5: Replace image ===
+        # === Step 4: Replace file on disk ===
         target_file_path = os.path.join(category_path, old_filename)
         if not os.path.exists(target_file_path):
-            raise Exception(f"Image '{old_filename}' not found in category '{category_name}'.")
+            return jsonify({"success": False, "error": f"Image '{old_filename}' not found in '{category_path}'."}), 404
 
+        # overwrite
         new_image.save(target_file_path)
 
-        # === Step 6: Update JSON ===
+        # === Step 5: Update JSON entry ===
         image_index = os.path.splitext(old_filename)[0]
         image_key = None
         for key, val in json_data.items():
-            if val["Name"] == image_index:
+            if str(val.get("Name")) == str(image_index):
                 image_key = key
                 break
 
         if not image_key:
-            raise Exception(f"JSON entry for image '{old_filename}' not found.")
+            # create entry if not present (best-effort)
+            image_key = f"Image{image_index}"
+            json_data[image_key] = {"Name": str(image_index), "Prem": prem_flag, "category": main_category}
+            if sub_category:
+                json_data[image_key]["sub_category"] = sub_category
+        else:
+            json_data[image_key]["Prem"] = prem_flag
+            json_data[image_key]["category"] = main_category
+            json_data[image_key]["sub_category"] = sub_category
 
-        json_data[image_key]["Prem"] = prem_flag
-        json_data[image_key]["category"] = category_name
-
-        # === Step 7: Save new JSON ===
-        os.makedirs(CURRENT_JSON_DIR, exist_ok=True)
-        new_json_path = os.path.join(CURRENT_JSON_DIR, f"{category_name}.json")
-        with open(new_json_path, 'w') as jf:
+        # === Step 6: Save JSON into CURRENT_JSON_DIR ===
+        current_json_path = os.path.join(CURRENT_JSON_DIR, json_rel_path)
+        os.makedirs(os.path.dirname(current_json_path), exist_ok=True)
+        with open(current_json_path, 'w', encoding='utf-8') as jf:
             json.dump(json_data, jf, indent=4)
 
-        # === Step 8: Update version ===
+        # === Step 7: Version ===
         version_data = increment_version()
 
         return jsonify({
             "success": True,
-            "message": f"Image '{old_filename}' replaced successfully in '{category_name}' with prem={prem_flag}.",
+            "message": f"Image '{old_filename}' replaced successfully in '{category_path}' with prem={prem_flag}.",
             "version": version_data
+        })
+
+    except Exception as e:
+        # === Rollback ===
+        rollback_error = None
+        try:
+            if os.path.exists(CURRENT_DIR):
+                shutil.rmtree(CURRENT_DIR)
+            if os.path.exists(BACKUP_DIR):
+                shutil.copytree(BACKUP_DIR, CURRENT_DIR)
+
+            # Restore Json_Files_Last -> Json_Files
+            backup_json_last = os.path.join(CURRENT_DIR, "Json_Files_Last")
+            restored_path = os.path.join(CURRENT_DIR, "Json_Files")
+            if os.path.exists(backup_json_last):
+                if os.path.exists(restored_path):
+                    shutil.rmtree(restored_path)
+                os.rename(backup_json_last, restored_path)
+
+        except Exception as re:
+            rollback_error = str(re)
+
+        error_response = {
+            "success": False,
+            "error": str(e)
+        }
+        if rollback_error:
+            error_response["rollback_error"] = rollback_error
+
+        return jsonify(error_response), 500
+
+
+# =======  * Delete the Existing Image * =======  
+def extract_index(filename):
+    match = re.search(r'(\d+)', filename)
+    return int(match.group(1)) if match else -1
+
+@app.route('/delete-image-from-category', methods=['POST'])
+def deleteImageFromCategory():
+    try:
+        main_category = request.form.get('main_category')
+        sub_category = request.form.get('sub_category')  # optional
+        filename = request.form.get('filename')
+
+        if not main_category or not filename:
+            return jsonify({"success": False, "error": "Missing main_category or filename"}), 400
+
+        deleted_index = extract_index(filename)
+        if deleted_index == -1:
+            return jsonify({"success": False, "error": "Invalid filename format"}), 400
+
+        # === Step 1: Backup CURRENT_DIR -> BACKUP_DIR ===
+        if os.path.exists(BACKUP_DIR):
+            shutil.rmtree(BACKUP_DIR)
+        shutil.copytree(CURRENT_DIR, BACKUP_DIR)
+
+        # === Step 2: Rename Json_Files -> Json_Files_Last in backup ===
+        backup_json_path = os.path.join(BACKUP_DIR, "Json_Files")
+        backup_json_last_path = os.path.join(BACKUP_DIR, "Json_Files_Last")
+        if os.path.exists(backup_json_path):
+            if os.path.exists(backup_json_last_path):
+                shutil.rmtree(backup_json_last_path)
+            os.rename(backup_json_path, backup_json_last_path)
+
+        # === Step 3: Determine paths ===
+            if sub_category:
+                category_path = os.path.join(CURRENT_DIR, main_category, sub_category)
+                category_json_path = os.path.join(backup_json_last_path, main_category, f"{sub_category}.json")
+                current_json_path = os.path.join(CURRENT_JSON_DIR, main_category, f"{sub_category}.json")
+            
+
+            else:
+                category_path = os.path.join(CURRENT_DIR, main_category)
+                category_json_path = os.path.join(backup_json_last_path, f"{main_category}.json")
+                current_json_path = os.path.join(CURRENT_JSON_DIR, f"{main_category}.json")
+
+
+        if not os.path.exists(category_path):
+            raise Exception(f"Category path '{category_path}' not found.")
+        if not os.path.exists(category_json_path):
+            raise Exception(f"JSON file not found at '{category_json_path}'.")
+
+        # === Step 4: Delete image file ===
+        file_path = os.path.join(category_path, filename)
+        if not os.path.exists(file_path):
+            raise Exception(f"Image '{filename}' not found in '{category_path}'.")
+        os.remove(file_path)
+
+        # === Step 5: Load JSON and remove entry ===
+        with open(category_json_path, 'r', encoding='utf-8') as jf:
+            json_data = json.load(jf)
+
+        json_items = sorted(json_data.values(), key=lambda x: int(x['Name']))
+
+        updated_json = {}
+        new_index = 0
+        for item in json_items:
+            current_index = int(item["Name"])
+            if current_index == deleted_index:
+                continue  # Skip deleted image
+
+            old_img_path = os.path.join(category_path, f"{current_index}.webp")
+            new_img_path = os.path.join(category_path, f"{new_index}.webp")
+
+            if os.path.exists(old_img_path):
+                os.rename(old_img_path, new_img_path)
+
+            item["Name"] = str(new_index)
+            updated_json[f"Image{new_index}"] = item
+            new_index += 1
+
+        # === Step 6: Save updated JSON ===
+        os.makedirs(os.path.dirname(current_json_path), exist_ok=True)
+        with open(current_json_path, 'w', encoding='utf-8') as jf:
+            json.dump(updated_json, jf, indent=4)
+
+        # === Step 7: Update version ===
+        version_info = increment_version()
+
+        return jsonify({
+            "success": True,
+            "message": f"Image '{filename}' deleted successfully from '{category_path}', JSON & images reindexed.",
+            "version": version_info
         })
 
     except Exception as e:
@@ -1161,7 +1416,6 @@ def replace_category_image():
             if os.path.exists(BACKUP_DIR):
                 shutil.copytree(BACKUP_DIR, CURRENT_DIR)
 
-            # Restore Json_Files_Last -> Json_Files
             backup_json_last = os.path.join(CURRENT_DIR, "Json_Files_Last")
             restored_path = os.path.join(CURRENT_DIR, "Json_Files")
             if os.path.exists(backup_json_last):
@@ -1182,126 +1436,130 @@ def replace_category_image():
         }), 500
 
 
-
-# =======  * Delete the Existing Image * =======  
-import re
-
-def extract_index(filename):
-    match = re.search(r'(\d+)', filename)
-    return int(match.group(1)) if match else -1
-
-@app.route('/delete-image-from-category', methods=['POST'])
-def deleteImageFromCategory():
-    try:
-        category_name = request.form.get('category_name')
-        filename = request.form.get('filename')
-
-        if not category_name or not filename:
-            return jsonify({"success": False, "error": "Missing category_name or filename"}), 400
-
-        # === Step 1: Backup CURRENT_DIR -> BACKUP_DIR
-        if os.path.exists(BACKUP_DIR):
-            shutil.rmtree(BACKUP_DIR)
-        shutil.copytree(CURRENT_DIR, BACKUP_DIR)
-
-        # === Step 2: Rename Json_Files -> Json_Files_Last inside backup
-        backup_json_path = os.path.join(BACKUP_DIR, "Json_Files")
-        backup_json_last_path = os.path.join(BACKUP_DIR, "Json_Files_Last")
-        if os.path.exists(backup_json_path):
-            if os.path.exists(backup_json_last_path):
-                shutil.rmtree(backup_json_last_path)
-            os.rename(backup_json_path, backup_json_last_path)
-
-        # === Step 3: Recreate Json_Files directory
-        os.makedirs(CURRENT_JSON_DIR, exist_ok=True)
-
-        # === Step 4: Validate paths
-        category_path = os.path.join(CURRENT_DIR, category_name)
-        if not os.path.exists(category_path):
-            raise Exception(f"Category '{category_name}' not found.")
-
-        deleted_index = extract_index(filename)
-        file_path = os.path.join(category_path, filename)
-        if not os.path.exists(file_path):
-            raise Exception(f"Image '{filename}' not found in category '{category_name}'.")
-
-        # === Step 5: Delete the image file
-        os.remove(file_path)
-
-        # === Step 6: Load category JSON from backup and remove deleted index
-        category_json_path = os.path.join(backup_json_last_path, f"{category_name}.json")
-        if not os.path.exists(category_json_path):
-            raise Exception(f"JSON file for category '{category_name}' not found.")
-
-        with open(category_json_path, 'r') as jf:
-            json_data = json.load(jf)
-
-        # Rebuild JSON and image filenames after deletion
-        json_items = list(json_data.values())
-        json_items.sort(key=lambda x: int(x['Name']))
-
-        updated_json = {}
-        new_index = 0
-        for item in json_items:
-            current_index = int(item["Name"])
-            if current_index == deleted_index:
-                continue  # Skip the deleted image
-
-            old_img_path = os.path.join(category_path, f"{current_index}.webp")
-            new_img_path = os.path.join(category_path, f"{new_index}.webp")
-
-            if os.path.exists(old_img_path):
-                os.rename(old_img_path, new_img_path)
-
-            item["Name"] = str(new_index)
-            updated_json[f"Image{new_index}"] = item
-            new_index += 1
-
-        # === Step 7: Save updated JSON to CURRENT_JSON_DIR
-        new_json_path = os.path.join(CURRENT_JSON_DIR, f"{category_name}.json")
-        with open(new_json_path, 'w') as jf:
-            json.dump(updated_json, jf, indent=4)
-
-        # === Step 8: Update version
-        version_info = increment_version()
-
-        return jsonify({
-            "success": True,
-            "message": f"Image '{filename}' deleted successfully, JSON and images reindexed.",
-            "version": version_info
-        })
-
-    except Exception as e:
-        # === Rollback
-        try:
-            if os.path.exists(CURRENT_DIR):
-                shutil.rmtree(CURRENT_DIR)
-            if os.path.exists(BACKUP_DIR):
-                shutil.copytree(BACKUP_DIR, CURRENT_DIR)
-
-            # Restore Json_Files_Last
-            backup_json_last = os.path.join(CURRENT_DIR, "Json_Files_Last")
-            if os.path.exists(backup_json_last):
-                restored_path = os.path.join(CURRENT_DIR, "Json_Files")
-                if os.path.exists(restored_path):
-                    shutil.rmtree(restored_path)
-                os.rename(backup_json_last, restored_path)
-
-        except Exception as rollback_error:
-            return jsonify({
-                "error": "Rollback failed.",
-                "details": str(rollback_error)
-            }), 500
-
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
  # ======= *  Update Premium of Existing Images * ========
+# @app.route('/update-prem-flag', methods=['POST'])
+# def update_prem_flag():
+#     try:
+#         updates = request.get_json()
+#         if not isinstance(updates, list) or not updates:
+#             return jsonify({"error": "Invalid or empty update list."}), 400
+
+#         # Backup the entire CURRENT_DIR -> BACKUP_DIR
+#         if os.path.exists(BACKUP_DIR):
+#             shutil.rmtree(BACKUP_DIR)
+#         shutil.copytree(CURRENT_DIR, BACKUP_DIR)
+
+#         # Rename Json_Files -> Json_Files_Last inside BACKUP_DIR
+#         backup_json_path = os.path.join(BACKUP_DIR, "Json_Files")
+#         backup_json_last_path = os.path.join(BACKUP_DIR, "Json_Files_Last")
+#         if os.path.exists(backup_json_path):
+#             if os.path.exists(backup_json_last_path):
+#                 shutil.rmtree(backup_json_last_path)
+#             os.rename(backup_json_path, backup_json_last_path)
+
+#         # Recreate empty Json_Files
+#         os.makedirs(CURRENT_JSON_DIR, exist_ok=True)
+
+#         # === Group updates by category ===
+#         from collections import defaultdict
+#         updates_by_category = defaultdict(list)
+#         for item in updates:
+#             if not isinstance(item, dict):
+#                 continue
+#             cat = item.get("category_name")
+#             file = item.get("filename")
+#             prem = item.get("prem")
+#             if cat and file and prem is not None:
+#                 updates_by_category[cat].append((file, prem))
+
+#         if not updates_by_category:
+#             return jsonify({"error": "No valid updates found."}), 400
+
+#         def extract_index(filename):
+#             match = re.search(r'(\d+)', filename)
+#             return int(match.group(1)) if match else -1
+
+#         failed_updates = []
+#         success_updates = []
+
+#         # === Process updates category-wise ===
+#         for category_name, files in updates_by_category.items():
+#             json_path = os.path.join(backup_json_last_path, f"{category_name}.json")
+#             if not os.path.exists(json_path):
+#                 failed_updates.append({
+#                     "category": category_name,
+#                     "reason": "JSON file not found"
+#                 })
+#                 continue
+
+#             try:
+#                 with open(json_path, 'r') as jf:
+#                     json_data = json.load(jf)
+#             except Exception as e:
+#                 failed_updates.append({
+#                     "category": category_name,
+#                     "reason": f"Failed to read JSON: {str(e)}"
+#                 })
+#                 continue
+
+#             for filename, prem_value in files:
+#                 index = extract_index(filename)
+#                 image_key = f"Image{index}"
+#                 if image_key not in json_data:
+#                     failed_updates.append({
+#                         "category": category_name,
+#                         "filename": filename,
+#                         "reason": f"{image_key} not found in JSON"
+#                     })
+#                     continue
+#                 json_data[image_key]["Prem"] = prem_value.lower() == "true"
+#                 success_updates.append((category_name, filename))
+
+#             # Save updated JSON
+#             new_json_path = os.path.join(CURRENT_JSON_DIR, f"{category_name}.json")
+#             with open(new_json_path, 'w') as jf:
+#                 json.dump(json_data, jf, indent=4)
+
+#         version_info = increment_version()
+
+#         return jsonify({
+#             "success": True,
+#             "updated": success_updates,
+#             "failed": failed_updates,
+#             "version": version_info
+#         })
+
+#     except Exception as e:
+#         # === Rollback in case of global failure ===
+#         try:
+#             if os.path.exists(CURRENT_DIR):
+#                 shutil.rmtree(CURRENT_DIR)
+#             if os.path.exists(BACKUP_DIR):
+#                 shutil.copytree(BACKUP_DIR, CURRENT_DIR)
+
+#             backup_json_last = os.path.join(CURRENT_DIR, "Json_Files_Last")
+#             if os.path.exists(backup_json_last):
+#                 restored_path = os.path.join(CURRENT_DIR, "Json_Files")
+#                 if os.path.exists(restored_path):
+#                     shutil.rmtree(restored_path)
+#                 os.rename(backup_json_last, restored_path)
+
+#         except Exception as rollback_error:
+#             return jsonify({
+#                 "error": "Rollback failed.",
+#                 "details": str(rollback_error)
+#             }), 500
+
+#         return jsonify({
+#             "success": False,
+#             "error": str(e)
+#         }), 500
 @app.route('/update-prem-flag', methods=['POST'])
 def update_prem_flag():
     try:
+        print("update-prem-flag called")
+        updates = request.get_json()
+        print("Received data:", updates)
         updates = request.get_json()
         if not isinstance(updates, list) or not updates:
             return jsonify({"error": "Invalid or empty update list."}), 400
@@ -1322,44 +1580,56 @@ def update_prem_flag():
         # Recreate empty Json_Files
         os.makedirs(CURRENT_JSON_DIR, exist_ok=True)
 
-        # === Group updates by category ===
         from collections import defaultdict
-        updates_by_category = defaultdict(list)
-        for item in updates:
-            if not isinstance(item, dict):
-                continue
-            cat = item.get("category_name")
-            file = item.get("filename")
-            prem = item.get("prem")
-            if cat and file and prem is not None:
-                updates_by_category[cat].append((file, prem))
-
-        if not updates_by_category:
-            return jsonify({"error": "No valid updates found."}), 400
+        import re
 
         def extract_index(filename):
             match = re.search(r'(\d+)', filename)
             return int(match.group(1)) if match else -1
 
+        # Group updates by (main_category, sub_category) tuple
+        updates_by_category = defaultdict(list)
+        for item in updates:
+            if not isinstance(item, dict):
+                continue
+            main_cat = item.get("main_category")
+            sub_cat = item.get("sub_category")  # optional, can be None
+            filename = item.get("filename")
+            prem = item.get("prem")
+            if main_cat and filename and prem is not None:
+                # Use tuple key
+                updates_by_category[(main_cat, sub_cat)].append((filename, prem))
+
+        if not updates_by_category:
+            return jsonify({"error": "No valid updates found."}), 400
+
         failed_updates = []
         success_updates = []
 
-        # === Process updates category-wise ===
-        for category_name, files in updates_by_category.items():
-            json_path = os.path.join(backup_json_last_path, f"{category_name}.json")
+        # Process updates grouped by (main_category, sub_category)
+        for (main_cat, sub_cat), files in updates_by_category.items():
+            if sub_cat:
+                json_path = os.path.join(backup_json_last_path, main_cat, f"{sub_cat}.json")
+                new_json_path = os.path.join(CURRENT_JSON_DIR, main_cat, f"{sub_cat}.json")
+            else:
+                json_path = os.path.join(backup_json_last_path, f"{main_cat}.json")
+                new_json_path = os.path.join(CURRENT_JSON_DIR, f"{main_cat}.json")
+
             if not os.path.exists(json_path):
                 failed_updates.append({
-                    "category": category_name,
+                    "category": main_cat,
+                    "sub_category": sub_cat,
                     "reason": "JSON file not found"
                 })
                 continue
 
             try:
-                with open(json_path, 'r') as jf:
+                with open(json_path, 'r', encoding='utf-8') as jf:
                     json_data = json.load(jf)
             except Exception as e:
                 failed_updates.append({
-                    "category": category_name,
+                    "category": main_cat,
+                    "sub_category": sub_cat,
                     "reason": f"Failed to read JSON: {str(e)}"
                 })
                 continue
@@ -1369,17 +1639,29 @@ def update_prem_flag():
                 image_key = f"Image{index}"
                 if image_key not in json_data:
                     failed_updates.append({
-                        "category": category_name,
+                        "category": main_cat,
+                        "sub_category": sub_cat,
                         "filename": filename,
                         "reason": f"{image_key} not found in JSON"
                     })
                     continue
-                json_data[image_key]["Prem"] = prem_value.lower() == "true"
-                success_updates.append((category_name, filename))
 
-            # Save updated JSON
-            new_json_path = os.path.join(CURRENT_JSON_DIR, f"{category_name}.json")
-            with open(new_json_path, 'w') as jf:
+                # Update Prem flag (accept true/false string or boolean)
+                if isinstance(prem_value, str):
+                    json_data[image_key]["Prem"] = prem_value.lower() == "true"
+                else:
+                    json_data[image_key]["Prem"] = bool(prem_value)
+
+                success_updates.append({
+                    "category": main_cat,
+                    "sub_category": sub_cat,
+                    "filename": filename
+                })
+
+            # Ensure directory exists before saving
+            os.makedirs(os.path.dirname(new_json_path), exist_ok=True)
+
+            with open(new_json_path, 'w', encoding='utf-8') as jf:
                 json.dump(json_data, jf, indent=4)
 
         version_info = increment_version()
@@ -1392,7 +1674,7 @@ def update_prem_flag():
         })
 
     except Exception as e:
-        # === Rollback in case of global failure ===
+        # Rollback in case of global failure
         try:
             if os.path.exists(CURRENT_DIR):
                 shutil.rmtree(CURRENT_DIR)
@@ -1408,6 +1690,7 @@ def update_prem_flag():
 
         except Exception as rollback_error:
             return jsonify({
+                "success": False,
                 "error": "Rollback failed.",
                 "details": str(rollback_error)
             }), 500
@@ -1422,9 +1705,10 @@ def update_prem_flag():
 @app.route('/swap-images_IBGC', methods=['POST'])
 def swap_images_IBGC():
     try:
-        category_name = request.form.get('category_name')
-        image1_name = request.form.get('image1_name')  # e.g., '002.webp'
-        image2_name = request.form.get('image2_name')  # e.g., '005.webp'
+        category_name = request.form.get('category_name')  # main category
+        sub_category = request.form.get('sub_category')    # optional
+        image1_name = request.form.get('image1_name')
+        image2_name = request.form.get('image2_name')
 
         if not all([category_name, image1_name, image2_name]):
             return jsonify({"error": "Missing parameters"}), 400
@@ -1445,28 +1729,37 @@ def swap_images_IBGC():
         # === Step 3: Recreate empty Json_Files
         os.makedirs(CURRENT_JSON_DIR, exist_ok=True)
 
-        # === Step 4: Resolve paths
-        category_path = os.path.join(CURRENT_DIR, category_name)
-        if not os.path.isdir(category_path):
-            raise FileNotFoundError(f"Category '{category_name}' not found.")
+        # === Step 4: Resolve folder and JSON paths
+        if sub_category:
+            # Subcategory case
+            category_path = os.path.join(CURRENT_DIR, category_name, sub_category)
+            backup_json_file = os.path.join(backup_json_last_path, category_name, f"{sub_category}.json")
+            new_json_path = os.path.join(CURRENT_JSON_DIR, category_name)
+            os.makedirs(new_json_path, exist_ok=True)
+            new_json_file = os.path.join(new_json_path, f"{sub_category}.json")
+        else:
+            # Main category case
+            category_path = os.path.join(CURRENT_DIR, category_name)
+            backup_json_file = os.path.join(backup_json_last_path, f"{category_name}.json")
+            new_json_file = os.path.join(CURRENT_JSON_DIR, f"{category_name}.json")
 
+        # === Step 5: Ensure image files exist
         img1_path = os.path.join(category_path, image1_name)
         img2_path = os.path.join(category_path, image2_name)
         if not os.path.exists(img1_path) or not os.path.exists(img2_path):
             raise FileNotFoundError("One or both image files not found.")
 
-        # === Step 5: Swap image files
+        # === Step 6: Swap image files
         temp_path = os.path.join(category_path, "__temp_swap__.webp")
         os.rename(img1_path, temp_path)
         os.rename(img2_path, img1_path)
         os.rename(temp_path, img2_path)
 
-        # === Step 6: Load and update JSON from backup
-        category_json_path = os.path.join(backup_json_last_path, f"{category_name}.json")
-        if not os.path.exists(category_json_path):
-            raise Exception(f"JSON for category '{category_name}' not found.")
+        # === Step 7: Load and modify JSON
+        if not os.path.exists(backup_json_file):
+            raise Exception(f"JSON file not found for category '{category_name}'.")
 
-        with open(category_json_path, 'r') as jf:
+        with open(backup_json_file, 'r') as jf:
             json_data = json.load(jf)
 
         def extract_index(filename):
@@ -1482,19 +1775,16 @@ def swap_images_IBGC():
         if item1_key not in json_data or item2_key not in json_data:
             raise Exception("One or both images not found in JSON data.")
 
-        # === Step 7: Swap the entire JSON entries
+        # === Step 8: Swap entries in JSON
         json_data[item1_key], json_data[item2_key] = (
             json_data[item2_key],
             json_data[item1_key],
         )
-
-        # === Step 8: Ensure their internal "Name" values match their keys
         json_data[item1_key]["Name"] = str(index1)
         json_data[item2_key]["Name"] = str(index2)
 
         # === Step 9: Save updated JSON
-        new_json_path = os.path.join(CURRENT_JSON_DIR, f"{category_name}.json")
-        with open(new_json_path, 'w') as jf:
+        with open(new_json_file, 'w') as jf:
             json.dump(json_data, jf, indent=4)
 
         # === Step 10: Update version
@@ -1507,8 +1797,8 @@ def swap_images_IBGC():
         })
 
     except Exception as e:
-        # === Rollback
         try:
+            # === Rollback
             if os.path.exists(CURRENT_DIR):
                 shutil.rmtree(CURRENT_DIR)
             if os.path.exists(BACKUP_DIR):
@@ -1547,11 +1837,13 @@ def category_summary_IBGC():
         for folder in sorted(os.listdir(CURRENT_DIR)):
             folder_path = os.path.join(CURRENT_DIR, folder)
 
-            # Skip the JSON directory
-            if not os.path.isdir(folder_path) or folder == "Json_Files":
+            # Skip the JSON directory and the "Frame Categories" folder
+            if (not os.path.isdir(folder_path) or
+                folder == "Json_Files" or
+                folder == "Frame Categories"):
                 continue
 
-            # Count image files (you can adjust allowed extensions if needed)
+            # Count image files (adjust allowed extensions if needed)
             image_count = len([
                 file for file in os.listdir(folder_path)
                 if file.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
@@ -1571,6 +1863,7 @@ def category_summary_IBGC():
             "error": "Failed to generate category summary.",
             "details": str(e)
         }), 500
+
 
 # ================================  Get Url of Image of any Category ===============================
 @app.route('/get-template-info_IBGC', methods=['GET'])
@@ -1611,6 +1904,86 @@ def get_template_info_IBGC():
             "error": "Something went wrong while fetching template info.",
             "details": str(e)
         }), 500
+
+# --------- Get Total Count For Frame Categories -----
+@app.route('/GetFrameCategoriesSummary_IBGC', methods=['GET'])
+def frame_categories_summary_IBGC():
+    try:
+        response = {}
+        count = 0
+
+        frame_categories_dir = os.path.join(CURRENT_DIR, "Frame Categories")
+        if not os.path.exists(frame_categories_dir):
+            return jsonify({"error": "'Frame Categories' directory not found."}), 404
+
+        for folder in sorted(os.listdir(frame_categories_dir)):
+            folder_path = os.path.join(frame_categories_dir, folder)
+
+            if not os.path.isdir(folder_path):
+                continue
+
+            image_count = len([
+                file for file in os.listdir(folder_path)
+                if file.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
+            ])
+
+            response[str(count)] = {
+                "category_name": folder,
+                "total_assets": image_count
+            }
+            count += 1
+
+        # Add total categories count
+        response["Total_Categories"] = count
+
+        return jsonify(response)
+
+    except Exception as e:
+        return jsonify({
+            "error": "Failed to generate frame categories summary.",
+            "details": str(e)
+        }), 500
+
+# ---- Get  URL  for FRAME ANY FRAME --------
+@app.route('/Get_Info_frames_IBGC', methods=['GET'])
+def get_template_info_frame_IBGC():
+    try:
+        category_name = request.args.get('category_name')
+        template_number = request.args.get('template_number')
+
+        if not category_name or template_number is None:
+            return jsonify({"error": "Missing category_name or template_number"}), 400
+
+        image_filename = f"{template_number}.webp"
+        json_file_path = os.path.join(CURRENT_JSON_DIR, "Frame Categories", f"{category_name}.json")
+
+        if not os.path.exists(json_file_path):
+            return jsonify({"error": "JSON for category not found in 'Frame Categories'."}), 404
+
+        with open(json_file_path, 'r') as jf:
+            data = json.load(jf)
+
+        image_key = f"Image{template_number}"
+        if image_key not in data:
+            return jsonify({"error": f"Template number {template_number} not found in JSON."}), 404
+
+        image_data = data[image_key]
+
+        base_url = request.host_url.rstrip('/')
+        image_url = f"{base_url}/static/Assets_IBGC/Frame Categories/{category_name}/{image_filename}"
+
+        return jsonify({
+            "ImageUrl": image_url,
+            "Name": image_data.get("Name"),
+            "Prem": image_data.get("Prem")
+        })
+
+    except Exception as e:
+        return jsonify({
+            "error": "Something went wrong while fetching frame category template info.",
+            "details": str(e)
+        }), 500
+
 
 # ============================ CHECK VERSION ===============================
 @app.route("/check-version_IBGC", methods=["GET"])
