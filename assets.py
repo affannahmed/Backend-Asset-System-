@@ -9,7 +9,9 @@ import zipfile
 
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True,
+     allow_headers="*", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+
 
 
 # --- Configurable Paths ---
