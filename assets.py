@@ -345,7 +345,7 @@ def delete_image():
             new_filename = f"{new_index}{ext}"
             new_path = os.path.join(image_dir, new_filename)
 
-            os.rename(old_path, new_path)
+            shutil.move(old_path, new_path)
 
             old_key = f"Image{idx}"
             new_key = f"Image{new_index}"
@@ -570,9 +570,9 @@ def swap_images():
         json.dump(data, jf, indent=4)
 
     temp_path = os.path.join(sub_folder, "__temp_swap__.jpg")
-    os.rename(img1_path, temp_path)
-    os.rename(img2_path, img1_path)
-    os.rename(temp_path, img2_path)
+    shutil.move(img1_path, temp_path)
+    shutil.move(img2_path, img1_path)
+    shutil.move(temp_path, img2_path)
 
     return jsonify({"message": "Images swapped successfully."}), 200
 
@@ -648,7 +648,7 @@ def add_category_IBGC():
         # Rename Json_Files to Json_Files_Last inside the backup
         json_dir_backup = os.path.join(BACKUP_DIR, "Json_Files")
         if os.path.exists(json_dir_backup):
-            os.rename(json_dir_backup, BACKUP_JSON_DIR)
+            shutil.move(json_dir_backup, BACKUP_JSON_DIR)
 
         # === Step 2: Create image save path ===
         if sub_category_name:
@@ -712,7 +712,7 @@ def add_category_IBGC():
             if os.path.exists(backup_json_last):
                 if os.path.exists(restored_path):
                     shutil.rmtree(restored_path)
-                os.rename(backup_json_last, restored_path)
+                shutil.move(backup_json_last, restored_path)
 
         except Exception as rollback_error:
             return jsonify({
@@ -844,10 +844,10 @@ def delete_category_IBGC():
             if os.path.exists(current_json_folder):
                 if os.path.exists(backup_json_folder):
                     shutil.rmtree(backup_json_folder)
-                os.rename(current_json_folder, backup_json_folder)
+                shutil.move(current_json_folder, backup_json_folder)
 
             # Backup entire CURRENT_DIR
-            os.rename(CURRENT_DIR, BACKUP_DIR)
+            shutil.move(CURRENT_DIR, BACKUP_DIR)
 
         # Step 2: Copy backup to new CURRENT_DIR
         shutil.copytree(BACKUP_DIR, CURRENT_DIR)
@@ -857,7 +857,7 @@ def delete_category_IBGC():
         if os.path.exists(new_json_last):
             if os.path.exists(new_json):
                 shutil.rmtree(new_json)
-            os.rename(new_json_last, new_json)
+            shutil.move(new_json_last, new_json)
 
         if sub_category:
             category_path = os.path.join(CURRENT_DIR, category_name, sub_category)
@@ -899,7 +899,7 @@ def delete_category_IBGC():
                 shutil.rmtree(CURRENT_DIR)
 
             if os.path.exists(BACKUP_DIR):
-                os.rename(BACKUP_DIR, CURRENT_DIR)
+                shutil.move(BACKUP_DIR, CURRENT_DIR)
 
                 # Restore Json_Files_Last to Json_Files
                 restored_json_last = os.path.join(CURRENT_DIR, "Json_Files_Last")
@@ -907,7 +907,7 @@ def delete_category_IBGC():
                 if os.path.exists(restored_json_last):
                     if os.path.exists(restored_json):
                         shutil.rmtree(restored_json)
-                    os.rename(restored_json_last, restored_json)
+                    shutil.move(restored_json_last, restored_json)
 
         except Exception as rollback_error:
             return jsonify({
@@ -944,7 +944,7 @@ def add_images_to_category():
         if os.path.exists(backup_json_path):
             if os.path.exists(backup_json_last_path):
                 shutil.rmtree(backup_json_last_path)
-            os.rename(backup_json_path, backup_json_last_path)
+            shutil.move(backup_json_path, backup_json_last_path)
 
         # === Step 2: Define category folder and JSON file paths ===
         if sub_category:
@@ -1004,7 +1004,7 @@ def add_images_to_category():
             old_file = os.path.join(category_folder_path, f"{old_index}.webp")
             new_file = os.path.join(category_folder_path, f"{new_index}.webp")
             if os.path.exists(old_file):
-                os.rename(old_file, new_file)
+                shutil.move(old_file, new_file)
             existing_by_index[old_index]["Name"] = str(new_index)
 
         # === Step 5: Save new images at indices 0..total_new-1 and build their JSON entries ===
@@ -1037,7 +1037,7 @@ def add_images_to_category():
                 old_path = os.path.join(category_folder_path, f"{old_index}.webp")
                 new_path = os.path.join(category_folder_path, f"{i}.webp")
                 if os.path.exists(old_path):
-                    os.rename(old_path, new_path)
+                    shutil.move(old_path, new_path)
             item["Name"] = str(i)
             final_data[f"Image{i}"] = item
 
@@ -1070,7 +1070,7 @@ def add_images_to_category():
             if os.path.exists(backup_json_last):
                 if os.path.exists(restored_path):
                     shutil.rmtree(restored_path)
-                os.rename(backup_json_last, restored_path)
+                shutil.move(backup_json_last, restored_path)
 
             return jsonify({
                 "success": False,
@@ -1119,13 +1119,13 @@ def rename_category():
 
         # MAIN rename
         if old_main_name != new_main_name:
-            os.rename(old_main_path, new_main_path)
+            shutil.move(old_main_path, new_main_path)
             if os.path.exists(old_main_json):
-                os.rename(old_main_json, new_main_json)
+                shutil.move(old_main_json, new_main_json)
             old_main_json_dir = os.path.join(CURRENT_JSON_DIR, old_main_name)
             new_main_json_dir = os.path.join(CURRENT_JSON_DIR, new_main_name)
             if os.path.exists(old_main_json_dir):
-                os.rename(old_main_json_dir, new_main_json_dir)
+                shutil.move(old_main_json_dir, new_main_json_dir)
 
             # --- NEW PART: update "category" inside new_main_json ---
             if os.path.exists(new_main_json):
@@ -1151,9 +1151,9 @@ def rename_category():
             if os.path.exists(new_sub_path):
                 return jsonify({"success": False, "error": f"Subcategory '{new_sub_name}' already exists in '{new_main_name}'"}), 400
 
-            os.rename(old_sub_path, new_sub_path)
+            shutil.move(old_sub_path, new_sub_path)
             if os.path.exists(old_sub_json):
-                os.rename(old_sub_json, new_sub_json)
+                shutil.move(old_sub_json, new_sub_json)
                 with open(new_sub_json, 'r+', encoding='utf-8') as f:
                     data = json.load(f)
                     data["sub_category"] = new_sub_name
@@ -1209,7 +1209,7 @@ def replace_category_image():
         if os.path.exists(backup_json_path):
             if os.path.exists(backup_json_last_path):
                 shutil.rmtree(backup_json_last_path)
-            os.rename(backup_json_path, backup_json_last_path)
+            shutil.move(backup_json_path, backup_json_last_path)
 
         # === Step 3: Prepare category paths ===
         if sub_category:
@@ -1302,7 +1302,7 @@ def replace_category_image():
             if os.path.exists(backup_json_last):
                 if os.path.exists(restored_path):
                     shutil.rmtree(restored_path)
-                os.rename(backup_json_last, restored_path)
+                shutil.move(backup_json_last, restored_path)
 
         except Exception as re:
             rollback_error = str(re)
@@ -1347,7 +1347,7 @@ def deleteImageFromCategory():
         if os.path.exists(backup_json_path):
             if os.path.exists(backup_json_last_path):
                 shutil.rmtree(backup_json_last_path)
-            os.rename(backup_json_path, backup_json_last_path)
+            shutil.move(backup_json_path, backup_json_last_path)
 
         # === Step 3: Determine paths ===
             if sub_category:
@@ -1390,7 +1390,7 @@ def deleteImageFromCategory():
             new_img_path = os.path.join(category_path, f"{new_index}.webp")
 
             if os.path.exists(old_img_path):
-                os.rename(old_img_path, new_img_path)
+                shutil.move(old_img_path, new_img_path)
 
             item["Name"] = str(new_index)
             updated_json[f"Image{new_index}"] = item
@@ -1423,7 +1423,7 @@ def deleteImageFromCategory():
             if os.path.exists(backup_json_last):
                 if os.path.exists(restored_path):
                     shutil.rmtree(restored_path)
-                os.rename(backup_json_last, restored_path)
+                shutil.move(backup_json_last, restored_path)
 
         except Exception as rollback_error:
             return jsonify({
@@ -1457,7 +1457,7 @@ def deleteImageFromCategory():
 #         if os.path.exists(backup_json_path):
 #             if os.path.exists(backup_json_last_path):
 #                 shutil.rmtree(backup_json_last_path)
-#             os.rename(backup_json_path, backup_json_last_path)
+#             shutil.move(backup_json_path, backup_json_last_path)
 
 #         # Recreate empty Json_Files
 #         os.makedirs(CURRENT_JSON_DIR, exist_ok=True)
@@ -1544,7 +1544,7 @@ def deleteImageFromCategory():
 #                 restored_path = os.path.join(CURRENT_DIR, "Json_Files")
 #                 if os.path.exists(restored_path):
 #                     shutil.rmtree(restored_path)
-#                 os.rename(backup_json_last, restored_path)
+#                 shutil.move(backup_json_last, restored_path)
 
 #         except Exception as rollback_error:
 #             return jsonify({
@@ -1562,7 +1562,7 @@ def update_prem_flag():
         print("update-prem-flag called")
         updates = request.get_json()
         print("Received data:", updates)
-        updates = request.get_json()
+        # updates = request.get_json()
         if not isinstance(updates, list) or not updates:
             return jsonify({"error": "Invalid or empty update list."}), 400
 
@@ -1577,7 +1577,7 @@ def update_prem_flag():
         if os.path.exists(backup_json_path):
             if os.path.exists(backup_json_last_path):
                 shutil.rmtree(backup_json_last_path)
-            os.rename(backup_json_path, backup_json_last_path)
+            shutil.move(backup_json_path, backup_json_last_path)
 
         # Recreate empty Json_Files
         os.makedirs(CURRENT_JSON_DIR, exist_ok=True)
@@ -1688,7 +1688,7 @@ def update_prem_flag():
                 restored_path = os.path.join(CURRENT_DIR, "Json_Files")
                 if os.path.exists(restored_path):
                     shutil.rmtree(restored_path)
-                os.rename(backup_json_last, restored_path)
+                shutil.move(backup_json_last, restored_path)
 
         except Exception as rollback_error:
             return jsonify({
@@ -1726,7 +1726,7 @@ def swap_images_IBGC():
         if os.path.exists(backup_json_path):
             if os.path.exists(backup_json_last_path):
                 shutil.rmtree(backup_json_last_path)
-            os.rename(backup_json_path, backup_json_last_path)
+            shutil.move(backup_json_path, backup_json_last_path)
 
         # === Step 3: Recreate empty Json_Files
         os.makedirs(CURRENT_JSON_DIR, exist_ok=True)
@@ -1753,9 +1753,9 @@ def swap_images_IBGC():
 
         # === Step 6: Swap image files
         temp_path = os.path.join(category_path, "__temp_swap__.webp")
-        os.rename(img1_path, temp_path)
-        os.rename(img2_path, img1_path)
-        os.rename(temp_path, img2_path)
+        shutil.move(img1_path, temp_path)
+        shutil.move(img2_path, img1_path)
+        shutil.move(temp_path, img2_path)
 
         # === Step 7: Load and modify JSON
         if not os.path.exists(backup_json_file):
@@ -1812,7 +1812,7 @@ def swap_images_IBGC():
                 restored_path = os.path.join(CURRENT_DIR, "Json_Files")
                 if os.path.exists(restored_path):
                     shutil.rmtree(restored_path)
-                os.rename(backup_json_last, restored_path)
+                shutil.move(backup_json_last, restored_path)
 
         except Exception as rollback_error:
             return jsonify({
